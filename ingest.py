@@ -37,6 +37,9 @@ class IngestionEngine:
         self._running = True
         
         try:
+            logger.info("🚀 STARTING TELEGRAM MESSAGE INGESTION ENGINE")
+            logger.info("📊 Will process messages with: username extraction + sentiment analysis + token detection")
+            
             # Step 1: Determine high water mark
             logger.info("Determining high water mark...")
             current_hwm = await self.tg_client.get_current_high_water_mark()
@@ -49,7 +52,8 @@ class IngestionEngine:
             await self._perform_backfill(current_hwm)
             
             # Step 3: Start live listener
-            logger.info("Starting live message processing...")
+            logger.info("🔴 TRANSITIONING TO LIVE MESSAGE PROCESSING...")
+            logger.info("🔴 Now monitoring for new Telegram messages in real-time")
             self.tg_client.add_message_handler(self._handle_new_message)
             self.tg_client.add_message_edit_handler(self._handle_message_edit)
             
@@ -165,25 +169,33 @@ class IngestionEngine:
                 processed_count += 1
                 last_successful_message = message  # Only update if both operations succeeded
                 
-                # Log progress every 100 messages globally
+                # Log progress every 100 messages globally (high-level for backfill)
                 total_so_far = global_processed_count + processed_count
                 if total_so_far % 100 == 0:
-                    logger.info(f"Processing progress: {total_so_far} messages processed, current message_id: {message.message_id}")
+                    logger.info(f"🔄 Batch progress: {total_so_far} messages processed, current message_id: {message.message_id}")
                 
             except Exception as e:
-                logger.error(f"Error processing message {message.message_id}: {e}")
+                logger.error(f"❌ Error processing message {message.message_id}: {e}")
         
         return processed_count, last_successful_message
     
     async def _handle_new_message(self, message: TelegramMessage):
         """Handle a new incoming message."""
         try:
-            logger.debug(f"New message received: {message.message_id}")
-            
             # Store and analyze
             await self.store.upsert_message(message)
             analysis = await analyzer.analyze_message(message)
             await self.store.upsert_analysis(analysis)
+            
+            # Enhanced logging for live messages
+            username = message.from_username or "Unknown"
+            sentiment_info = ""
+            if analysis.is_investment and analysis.sentiment:
+                sentiment_info = f" | {analysis.sentiment.value}"
+                if analysis.tokens:
+                    sentiment_info += f" | tokens: {analysis.tokens}"
+            
+            logger.info(f"🔴 LIVE msg {message.message_id} | {username}{sentiment_info} | {message.text[:60]}...")
             
             # Update checkpoint
             checkpoint = IngestCheckpoint(
