@@ -420,7 +420,10 @@ class DatabaseStore:
                 is_investment = bool(row[12]) if len(row) > 12 and row[12] is not None else False
                 sentiment = row[13] if len(row) > 13 else None
                 tokens_json = row[14] if len(row) > 14 else None
-                tokens = json.loads(tokens_json) if tokens_json else []
+                try:
+                    tokens = json.loads(tokens_json) if tokens_json else []
+                except (json.JSONDecodeError, TypeError):
+                    tokens = []
             
             if is_investment:
                 investment_messages += 1

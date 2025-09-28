@@ -44,10 +44,11 @@ class Config(BaseSettings):
             return []
         return [int(x.strip()) for x in self.admin_user_ids.split(',') if x.strip()]
     
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
+    model_config = {
+        "env_file": ".env",
+        "env_file_encoding": "utf-8", 
+        "case_sensitive": False
+    }
 
 
 # Global config instance
