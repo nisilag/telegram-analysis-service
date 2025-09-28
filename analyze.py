@@ -240,18 +240,46 @@ class MessageAnalyzer:
         cleaned_text = re.sub(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', '', text)
         cleaned_text = re.sub(r'[^\w\s\.,!?$%\-]', '', cleaned_text)
         
+        # Filter out newsletter/spam patterns
+        spam_patterns = [
+            r'new edition.*newsletter',
+            r'top \d+ mindshare',
+            r'ive published.*newsletter',
+            r'trading.*investing.*indicators',
+            r'see how i.*',
+            r'subscribe.*',
+            r'follow.*for.*updates'
+        ]
+        
+        # Check if this looks like newsletter spam
+        text_lower = cleaned_text.lower()
+        if any(re.search(pattern, text_lower) for pattern in spam_patterns):
+            # For newsletter content, extract only token-specific insights
+            token_sentences = []
+            sentences = re.split(r'[.!?]+', cleaned_text)
+            for sentence in sentences:
+                if any(token in sentence.upper() for token in ['$', 'BTC', 'ETH', 'SOL', 'BULLISH', 'BEARISH', 'PUMP', 'DUMP']):
+                    if len(sentence.strip()) > 15:
+                        token_sentences.append(sentence.strip())
+            return token_sentences[:2]  # Limit to 2 token-specific points
+        
         # Split into sentences
         sentences = re.split(r'[.!?]+', cleaned_text)
-        sentences = [s.strip() for s in sentences if s.strip() and len(s.strip()) > 10]
+        sentences = [s.strip() for s in sentences if s.strip() and len(s.strip()) > 15]
         
         # Take up to 3 most meaningful sentences
         key_points = []
         for sentence in sentences[:3]:
             if len(sentence) > 20:  # Only meaningful sentences
-                # Truncate if too long
-                if len(sentence) > 100:
-                    sentence = sentence[:97] + "..."
-                key_points.append(sentence)
+                # Skip generic phrases
+                if not any(generic in sentence.lower() for generic in [
+                    'honestly asking', 'what do you think', 'let me know', 'thoughts?',
+                    'anyone else', 'does anyone', 'what are your'
+                ]):
+                    # Truncate if too long
+                    if len(sentence) > 120:
+                        sentence = sentence[:117] + "..."
+                    key_points.append(sentence)
         
         return key_points
     

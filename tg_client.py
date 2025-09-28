@@ -201,15 +201,35 @@ class TelegramClientWrapper:
                 except Exception:
                     forward_from = str(message.forward.from_id)
         
+        # Extract username from first line of message text
+        message_text = message.message or ""
+        extracted_username = None
+        actual_text = message_text
+        
+        if message_text.strip():
+            lines = message_text.strip().split('\n')
+            if len(lines) > 1:
+                # First line is likely the username, rest is the actual message
+                first_line = lines[0].strip()
+                # Simple heuristic: if first line is short and doesn't contain common message words
+                if (len(first_line) <= 50 and 
+                    not any(word in first_line.lower() for word in ['http', 'www', '$', 'the ', 'and ', 'this ', 'that ']) and
+                    len(first_line.split()) <= 3):
+                    extracted_username = first_line
+                    actual_text = '\n'.join(lines[1:]).strip()
+        
+        # Use extracted username if available, otherwise fall back to API username
+        final_username = extracted_username or from_username
+        
         return TelegramMessage(
             chat_id=self.target_chat_id,
             message_id=message.id,
             ts_utc=message.date.replace(tzinfo=timezone.utc),
             from_user_id=from_user_id,
-            from_username=from_username,
+            from_username=final_username,
             is_forwarded=is_forwarded,
             forward_from=forward_from,
-            text=message.message or "",
+            text=actual_text,
             urls=urls,
             reply_to_id=message.reply_to_msg_id,
             edit_date=message.edit_date.replace(tzinfo=timezone.utc) if message.edit_date else None
