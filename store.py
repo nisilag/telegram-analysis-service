@@ -440,8 +440,9 @@ class DatabaseStore:
             if is_investment:
                 investment_messages += 1
                 
-            if sentiment:
-                sentiment_breakdown[SentimentType(sentiment)] += 1
+                # Only count sentiment for investment-related messages
+                if sentiment:
+                    sentiment_breakdown[SentimentType(sentiment)] += 1
                 
             for token in tokens:
                 token_counts[token] = token_counts.get(token, 0) + 1

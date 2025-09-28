@@ -181,6 +181,12 @@ class ReportGenerator:
                 
             username = msg.get('from_username') or 'Unknown'  # Handle None usernames
             sentiment = msg.get('sentiment', 'NEUTRAL')
+            # Handle both string and enum types
+            if hasattr(sentiment, 'value'):
+                sentiment_str = sentiment.value
+            else:
+                sentiment_str = str(sentiment) if sentiment else 'NEUTRAL'
+                
             key_points = msg.get('key_points', [])
             
             for token in tokens:
@@ -203,9 +209,9 @@ class ReportGenerator:
                 
                 # Categorize key points by sentiment (filter out None/empty values)
                 valid_key_points = [point for point in key_points[:2] if point and str(point).strip()]
-                if sentiment == 'BULLISH':
+                if sentiment_str == 'BULLISH':
                     token_data[token_key]['bullish_points'].extend(valid_key_points)
-                elif sentiment == 'BEARISH':
+                elif sentiment_str == 'BEARISH':
                     token_data[token_key]['bearish_points'].extend(valid_key_points)
                 else:
                     token_data[token_key]['neutral_points'].extend(valid_key_points)
