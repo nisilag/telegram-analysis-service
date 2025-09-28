@@ -31,7 +31,19 @@ class DatabaseStore:
     async def initialize(self):
         """Initialize database connection and create tables."""
         if self.is_postgres:
-            self.pool = await asyncpg.create_pool(self.db_url)
+            # Parse URL to avoid DNS resolution issues in asyncpg
+            from urllib.parse import urlparse
+            parsed = urlparse(self.db_url)
+            
+            # Use direct connection parameters instead of URL
+            self.pool = await asyncpg.create_pool(
+                host=parsed.hostname,
+                port=parsed.port or 5432,
+                user=parsed.username,
+                password=parsed.password,
+                database=parsed.path.lstrip('/'),
+                ssl=False  # Disable SSL to avoid DNS issues
+            )
             async with self.pool.acquire() as conn:
                 await self._create_tables_postgres(conn)
         else:
