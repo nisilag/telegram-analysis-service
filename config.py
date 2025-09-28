@@ -2,7 +2,7 @@
 Configuration management using Pydantic settings.
 """
 from typing import List, Optional
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
 
 
@@ -37,19 +37,20 @@ class Config(BaseSettings):
     log_level: str = Field(default="INFO", description="Logging level")
     log_file: Optional[str] = Field(default=None, description="Log file path")
     
+    @field_validator('admin_user_ids', mode='before')
+    @classmethod
+    def parse_admin_user_ids(cls, v):
+        """Parse comma-separated admin user IDs."""
+        if isinstance(v, str):
+            if not v or v.strip() == '':
+                return []
+            return [int(x.strip()) for x in v.split(',') if x.strip()]
+        return v or []
+    
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
         case_sensitive = False
-        
-        @classmethod
-        def parse_env_var(cls, field_name: str, raw_val: str) -> any:
-            """Custom parser for environment variables."""
-            if field_name == 'admin_user_ids':
-                if not raw_val:
-                    return []
-                return [int(x.strip()) for x in raw_val.split(',') if x.strip()]
-            return cls.json_loads(raw_val)
 
 
 # Global config instance
