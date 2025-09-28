@@ -1,0 +1,34 @@
+# Development override for docker-compose
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      # Mount source code for live development
+      - .:/app
+      # Override entrypoint for development
+      - ./dev-entrypoint.sh:/dev-entrypoint.sh
+    environment:
+      # Development-specific settings
+      LOG_LEVEL: DEBUG
+      PYTHONUNBUFFERED: 1
+      # Enable auto-reload (if using a development server)
+      DEVELOPMENT: "true"
+    # Override command for development
+    # command: python -u app.py
+    # Use development entrypoint
+    entrypoint: ["/dev-entrypoint.sh"]
+    
+  postgres:
+    # Expose PostgreSQL port for external access during development
+    ports:
+      - "5432:5432"
+    environment:
+      # Less restrictive settings for development
+      POSTGRES_LOG_STATEMENT: all
+      POSTGRES_LOG_MIN_DURATION_STATEMENT: 0
