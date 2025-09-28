@@ -100,7 +100,7 @@ class MessageAnalyzer:
             key_points=key_points,
             confidence=confidence,
             model_version=config.model_version,
-            analyzed_at=datetime.utcnow()
+            analyzed_at=datetime.utcnow().replace(tzinfo=timezone.utc)
         )
     
     def _extract_tokens(self, text: str) -> List[str]:

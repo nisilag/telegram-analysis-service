@@ -120,7 +120,7 @@ class IngestionEngine:
                     chat_id=self.chat_id,
                     last_message_id=last_message.message_id,
                     last_ts_utc=last_message.ts_utc,
-                    updated_at=datetime.utcnow()
+                    updated_at=datetime.utcnow().replace(tzinfo=timezone.utc)
                 )
                 await self.store.update_checkpoint(checkpoint)
                 
@@ -176,7 +176,7 @@ class IngestionEngine:
                 chat_id=self.chat_id,
                 last_message_id=message.message_id,
                 last_ts_utc=message.ts_utc,
-                updated_at=datetime.utcnow()
+                updated_at=datetime.utcnow().replace(tzinfo=timezone.utc)
             )
             await self.store.update_checkpoint(checkpoint)
             
@@ -258,12 +258,12 @@ class IngestionEngine:
     
     async def get_stats(self) -> IngestionStats:
         """Get current ingestion statistics."""
-        self.stats.last_updated = datetime.utcnow()
+        self.stats.last_updated = datetime.utcnow().replace(tzinfo=timezone.utc)
         
         # Calculate lag if we have a checkpoint
         checkpoint = await self.store.get_checkpoint(self.chat_id)
         if checkpoint:
-            lag = (datetime.utcnow() - checkpoint.last_ts_utc.replace(tzinfo=None)).total_seconds()
+            lag = (datetime.utcnow().replace(tzinfo=timezone.utc) - checkpoint.last_ts_utc).total_seconds()
             self.stats.ingest_lag_seconds = max(0, lag)
         
         return self.stats
