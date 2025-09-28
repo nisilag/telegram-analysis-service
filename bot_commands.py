@@ -25,7 +25,7 @@ class TelegramBot:
         self.ingestion_engine = ingestion_engine
         self.report_generator = ReportGenerator(store)
         self.bot_token = config.bot_token
-        self.admin_user_ids = set(config.admin_user_ids)
+        self.admin_user_ids = set(config.get_admin_user_ids())
         self.target_chat_id = config.target_chat_id
         self.client = None
         

@@ -31,21 +31,17 @@ class Config(BaseSettings):
     
     # Bot settings (optional)
     bot_token: Optional[str] = Field(default=None, description="Telegram bot token for commands")
-    admin_user_ids: List[int] = Field(default_factory=list, description="Admin user IDs")
+    admin_user_ids: Optional[str] = Field(default="", description="Admin user IDs (comma-separated)")
     
     # Logging
     log_level: str = Field(default="INFO", description="Logging level")
     log_file: Optional[str] = Field(default=None, description="Log file path")
     
-    @field_validator('admin_user_ids', mode='before')
-    @classmethod
-    def parse_admin_user_ids(cls, v):
-        """Parse comma-separated admin user IDs."""
-        if isinstance(v, str):
-            if not v or v.strip() == '':
-                return []
-            return [int(x.strip()) for x in v.split(',') if x.strip()]
-        return v or []
+    def get_admin_user_ids(self) -> List[int]:
+        """Get parsed admin user IDs as list of integers."""
+        if not self.admin_user_ids or self.admin_user_ids.strip() == '':
+            return []
+        return [int(x.strip()) for x in self.admin_user_ids.split(',') if x.strip()]
     
     class Config:
         env_file = ".env"
