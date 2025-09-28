@@ -129,8 +129,8 @@ class ReportGenerator:
             mention_count = data['message_count']
             
             # Get sentiment breakdown
-            bullish_count = len(data['bullish_points'])
-            bearish_count = len(data['bearish_points'])
+            bullish_count = data['bullish_count']
+            bearish_count = data['bearish_count']
             
             # Format sentiment summary
             sentiment_summary = []
@@ -187,9 +187,6 @@ class ReportGenerator:
             else:
                 sentiment_str = str(sentiment) if sentiment else 'NEUTRAL'
             
-            # Debug logging - remove after fixing
-            if sentiment_str in ['BULLISH', 'BEARISH']:
-                print(f"DEBUG: Found {sentiment_str} sentiment for tokens {tokens}")
                 
             key_points = msg.get('key_points', [])
             
@@ -205,19 +202,25 @@ class ReportGenerator:
                         'bullish_points': [],
                         'bearish_points': [],
                         'neutral_points': [],
-                        'message_count': 0
+                        'message_count': 0,
+                        'bullish_count': 0,
+                        'bearish_count': 0,
+                        'neutral_count': 0
                     }
                 
                 token_data[token_key]['contributors'].add(username)
                 token_data[token_key]['message_count'] += 1
                 
-                # Categorize key points by sentiment (filter out None/empty values)
+                # Count sentiment occurrences and categorize key points
                 valid_key_points = [point for point in key_points[:2] if point and str(point).strip()]
                 if sentiment_str == 'BULLISH':
+                    token_data[token_key]['bullish_count'] += 1
                     token_data[token_key]['bullish_points'].extend(valid_key_points)
                 elif sentiment_str == 'BEARISH':
+                    token_data[token_key]['bearish_count'] += 1
                     token_data[token_key]['bearish_points'].extend(valid_key_points)
                 else:
+                    token_data[token_key]['neutral_count'] += 1
                     token_data[token_key]['neutral_points'].extend(valid_key_points)
         
         # Convert sets to sorted lists and limit points
