@@ -96,6 +96,119 @@ class ReportGenerator:
         
         return header + summary + sentiment_section + tokens_section + messages_section
     
+    def format_token_analysis_report(self, result: ReportResult, 
+                                   start_date: datetime, end_date: datetime) -> str:
+        """Format report in the enhanced token analysis format similar to the provided example."""
+        
+        # Header summary
+        investment_pct = (result.investment_messages / result.total_messages * 100) if result.total_messages > 0 else 0
+        
+        header = f"**📊 Token Analysis Report**\n"
+        header += f"📅 {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}\n\n"
+        
+        summary = f"Total posts retrieved in the search: **{result.total_messages}**\n"
+        summary += f"Posts that received Investment Related = TRUE: **{result.investment_messages}**\n"
+        
+        # Group messages by token
+        token_data = self._group_messages_by_token(result.messages)
+        summary += f"Rows in the table: **{len(token_data)}**\n\n"
+        
+        if not token_data:
+            return header + summary + "No investment-related tokens found in this period.\n"
+        
+        # Create the main table
+        table = "```\n"
+        table += f"{'Investment Topic':<15} | {'Account':<40} | {'Key Points'}\n"
+        table += f"{'-' * 15} | {'-' * 40} | {'-' * 50}\n"
+        
+        for token, data in token_data.items():
+            contributors = ", ".join(data['contributors'][:8])  # Limit to 8 contributors
+            if len(data['contributors']) > 8:
+                contributors += f", +{len(data['contributors']) - 8} more"
+            
+            # Format key points by sentiment
+            bullish_points = [f"- {point}" for point in data['bullish_points'][:3]]
+            bearish_points = [f"- {point}" for point in data['bearish_points'][:3]]
+            
+            key_points = ""
+            if bullish_points:
+                key_points += "BULLISH\\n" + "\\n".join(bullish_points)
+            if bearish_points:
+                if key_points:
+                    key_points += "\\n"
+                key_points += "BEARISH\\n" + "\\n".join(bearish_points)
+            
+            if not key_points:
+                key_points = "NEUTRAL\\n- No strong sentiment detected"
+            
+            # Format the row (handle multi-line key points)
+            lines = key_points.split("\\n")
+            first_line = lines[0] if lines else ""
+            
+            table += f"{token:<15} | {contributors:<40} | {first_line}\n"
+            
+            # Add remaining key points lines
+            for line in lines[1:]:
+                table += f"{'':<15} | {'':<40} | {line}\n"
+            
+            table += f"{'-' * 15} | {'-' * 40} | {'-' * 50}\n"
+        
+        table += "```\n"
+        
+        return header + summary + table
+    
+    def _group_messages_by_token(self, messages: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+        """Group messages by token and aggregate data."""
+        token_data = {}
+        
+        for msg in messages:
+            # Skip non-investment messages
+            if not msg.get('is_investment'):
+                continue
+                
+            tokens = msg.get('tokens', [])
+            if not tokens:
+                continue
+                
+            username = msg.get('from_username', 'Unknown')
+            sentiment = msg.get('sentiment', 'NEUTRAL')
+            key_points = msg.get('key_points', [])
+            
+            for token in tokens:
+                token_key = f"${token}"
+                
+                if token_key not in token_data:
+                    token_data[token_key] = {
+                        'contributors': set(),
+                        'bullish_points': [],
+                        'bearish_points': [],
+                        'neutral_points': [],
+                        'message_count': 0
+                    }
+                
+                token_data[token_key]['contributors'].add(username)
+                token_data[token_key]['message_count'] += 1
+                
+                # Categorize key points by sentiment
+                if sentiment == 'BULLISH':
+                    token_data[token_key]['bullish_points'].extend(key_points[:2])  # Limit points per message
+                elif sentiment == 'BEARISH':
+                    token_data[token_key]['bearish_points'].extend(key_points[:2])
+                else:
+                    token_data[token_key]['neutral_points'].extend(key_points[:2])
+        
+        # Convert sets to sorted lists and limit points
+        for token_key in token_data:
+            token_data[token_key]['contributors'] = sorted(list(token_data[token_key]['contributors']))
+            # Limit to top points to avoid overwhelming output
+            token_data[token_key]['bullish_points'] = token_data[token_key]['bullish_points'][:4]
+            token_data[token_key]['bearish_points'] = token_data[token_key]['bearish_points'][:4]
+        
+        # Sort by message count (most discussed tokens first)
+        return dict(sorted(token_data.items(), 
+                          key=lambda x: x[1]['message_count'], 
+                          reverse=True))
+    
     async def export_to_csv(self, result: ReportResult, 
                           start_date: datetime, end_date: datetime) -> str:
         """Export report results to CSV and return file path."""

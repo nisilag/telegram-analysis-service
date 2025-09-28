@@ -3,8 +3,8 @@ Telegram bot interface for querying and reporting.
 """
 import asyncio
 import os
-from datetime import datetime
-from typing import Optional
+from datetime import datetime, timedelta
+from typing import Optional, List
 
 from telethon import TelegramClient, events
 from telethon.tl.types import DocumentAttributeFilename
@@ -81,6 +81,14 @@ class TelegramBot:
             except Exception as e:
                 logger.error(f"Error in audit command: {e}")
                 await event.reply(f"❌ Error in audit: {str(e)}")
+        
+        @self.client.on(events.NewMessage(pattern=r'/tokenreport\s*(.*)'))
+        async def handle_token_report_command(event):
+            try:
+                await self._handle_token_report_command(event)
+            except Exception as e:
+                logger.error(f"Error in token report command: {e}")
+                await event.reply(f"❌ Error generating token report: {str(e)}")
         
         @self.client.on(events.NewMessage(pattern=r'/help'))
         async def handle_help_command(event):
@@ -166,13 +174,52 @@ class TelegramBot:
                 summary = '\n'.join(summary_lines) + f"\n\n📎 Report too long. Use `/export {date_range_str}` for full data."
                 await event.reply(summary)
             else:
-                await event.reply(markdown_report)
+                await event.reply(token_report)
                 
         except ValueError as e:
-            await event.reply(f"❌ Invalid date format: {str(e)}")
+            await event.reply(f"Invalid date format: {str(e)}")
         except Exception as e:
-            logger.error(f"Error generating report: {e}")
-            await event.reply(f"❌ Error generating report: {str(e)}")
+            logger.error(f"Error generating token report: {e}")
+            await event.reply(f"Error generating token report: {str(e)}")
+    
+    def _split_message(self, message: str, max_length: int) -> List[str]:
+        """Split a long message into chunks that fit Telegram's limits."""
+        if len(message) <= max_length:
+            return [message]
+        
+        chunks = []
+        current_chunk = ""
+        
+        for line in message.split('\n'):
+            if len(current_chunk) + len(line) + 1 <= max_length:
+                current_chunk += line + '\n'
+            else:
+                if current_chunk:
+                    chunks.append(current_chunk.rstrip())
+                current_chunk = line + '\n'
+        
+        if current_chunk:
+            chunks.append(current_chunk.rstrip())
+        
+        return chunks
+    
+    def _parse_date_range(self, date_str: str) -> tuple[datetime, datetime]:
+        """Parse date range string into start and end datetime objects."""
+        # This is a simplified version - you might want to move the full logic from report.py
+        now = datetime.utcnow()
+        
+        if "last" in date_str.lower():
+            if "24h" in date_str or "1d" in date_str:
+                start_date = now - timedelta(days=1)
+            elif "7d" in date_str:
+                start_date = now - timedelta(days=7)
+            elif "30d" in date_str:
+                start_date = now - timedelta(days=30)
+            else:
+                raise ValueError("Unsupported date range. Use: last 24h, last 7d, or last 30d")
+            return start_date, now
+        else:
+            raise ValueError("Only 'last X' date ranges supported for now. Use: last 24h, last 7d, or last 30d")
     
     async def _handle_export_command(self, event):
         """Handle /export command."""
@@ -314,7 +361,8 @@ class TelegramBot:
 🤖 **Telegram Analysis Bot Commands**
 
 **📊 Reports:**
-• `/report <date_range>` - Generate analysis report
+• `/report <date_range>` - Generate standard analysis report
+• `/tokenreport <date_range>` - Generate enhanced token analysis report
 • `/export <date_range>` - Export data as CSV
 • `/stats` - Show ingestion statistics
 
