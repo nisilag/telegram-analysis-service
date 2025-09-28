@@ -1,0 +1,31 @@
+# Docker Compose override for authentication
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.auth.yml run --rm auth
+
+version: '3.8'
+
+services:
+  auth:
+    build: .
+    container_name: telegram_auth
+    stdin_open: true
+    tty: true
+    environment:
+      # Telegram API (from .env file)
+      TELEGRAM_API_ID: ${TELEGRAM_API_ID}
+      TELEGRAM_API_HASH: ${TELEGRAM_API_HASH}
+      TARGET_CHAT_ID: ${TARGET_CHAT_ID}
+      
+      # Session path
+      TELETHON_SESSION_PATH: /app/data/telegram_session
+      
+      # Database (not needed for auth but required by config)
+      DB_URL: sqlite:///./temp_auth.db
+      POSTGRES_PASSWORD: not_needed_for_auth
+    volumes:
+      # Mount the same session volume as the main app
+      - session_data:/app/data
+    networks:
+      - telegram_network
+    command: python auth.py
+    profiles:
+      - auth
