@@ -174,7 +174,7 @@ class TelegramBot:
                 summary = '\n'.join(summary_lines) + f"\n\n📎 Report too long. Use `/export {date_range_str}` for full data."
                 await event.reply(summary)
             else:
-                await event.reply(token_report)
+                await event.reply(markdown_report)
                 
         except ValueError as e:
             await event.reply(f"Invalid date format: {str(e)}")
@@ -220,6 +220,75 @@ class TelegramBot:
             return start_date, now
         else:
             raise ValueError("Only 'last X' date ranges supported for now. Use: last 24h, last 7d, or last 30d")
+    
+    async def _handle_token_report_command(self, event):
+        """Handle /tokenreport command - enhanced token analysis format."""
+        args = event.pattern_match.group(1).strip()
+        
+        if not args:
+            await event.reply("""
+📊 **Token Report Command Usage:**
+
+`/tokenreport <date_range>`
+
+**Date Range Examples:**
+• `last 24h` - Last 24 hours
+• `last 7d` - Last 7 days  
+• `last 30d` - Last 30 days
+• `2024-01-01 to 2024-01-31` - Date range
+
+**Examples:**
+• `/tokenreport last 24h`
+• `/tokenreport last 7d`
+• `/tokenreport last 30d`
+
+This generates an enhanced report showing tokens, contributors, and sentiment-categorized key points.
+            """)
+            return
+        
+        try:
+            # Parse date range (reuse existing logic)
+            start_date, end_date = self._parse_date_range(args)
+            
+            # Send "generating..." message
+            status_msg = await event.reply("🔄 Generating token analysis report...")
+            
+            # Generate report
+            request = ReportRequest(
+                start_date=start_date,
+                end_date=end_date,
+                topic_filter=None,  # No topic filter for token analysis
+                limit=None,         # No limit for comprehensive analysis
+                chat_id=self.target_chat_id
+            )
+            
+            result = await self.report_generator.generate_report(request)
+            
+            # Format using the new token analysis format
+            token_report = self.report_generator.format_token_analysis_report(
+                result, start_date, end_date
+            )
+            
+            # Delete status message
+            await status_msg.delete()
+            
+            # Send report (split if too long)
+            if len(token_report) > 4000:  # Telegram message limit
+                # Split the report into chunks
+                chunks = self._split_message(token_report, 4000)
+                for i, chunk in enumerate(chunks):
+                    if i == 0:
+                        await event.reply(chunk)
+                    else:
+                        await event.reply(f"**Continued ({i+1}/{len(chunks)}):**\n\n{chunk}")
+            else:
+                await event.reply(token_report)
+                
+        except ValueError as e:
+            await event.reply(f"❌ {str(e)}")
+        except Exception as e:
+            logger.error(f"Error generating token report: {e}")
+            await event.reply(f"❌ Error generating token report: {str(e)}")
     
     async def _handle_export_command(self, event):
         """Handle /export command."""
