@@ -40,6 +40,8 @@ class IngestionEngine:
             # Step 1: Determine high water mark
             logger.info("Determining high water mark...")
             current_hwm = await self.tg_client.get_current_high_water_mark()
+            logger.info(f"DEBUG: HWM ts_utc type: {type(current_hwm.ts_utc)}, value: {current_hwm.ts_utc}")
+            logger.info(f"DEBUG: HWM created_at type: {type(current_hwm.created_at)}, value: {current_hwm.created_at}")
             await self.store.set_high_water_mark(current_hwm)
             logger.info(f"High water mark set: message_id={current_hwm.message_id}, ts={current_hwm.ts_utc}")
             
