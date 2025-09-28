@@ -1,7 +1,7 @@
 """
 Data models for the Telegram analysis service.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 from enum import Enum
 from pydantic import BaseModel, Field
@@ -45,7 +45,7 @@ class MessageAnalysis(BaseModel):
     key_points: List[str] = Field(default_factory=list)
     confidence: Optional[float] = None
     model_version: int = 1
-    analyzed_at: datetime = Field(default_factory=datetime.utcnow)
+    analyzed_at: datetime = Field(default_factory=lambda: datetime.utcnow().replace(tzinfo=timezone.utc))
     
     class Config:
         json_encoders = {
@@ -58,7 +58,7 @@ class IngestCheckpoint(BaseModel):
     chat_id: int
     last_message_id: int
     last_ts_utc: datetime
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=lambda: datetime.utcnow().replace(tzinfo=timezone.utc))
     
     class Config:
         json_encoders = {
@@ -71,7 +71,7 @@ class HighWaterMark(BaseModel):
     chat_id: int
     message_id: int
     ts_utc: datetime
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.utcnow().replace(tzinfo=timezone.utc))
 
 
 class ReportRequest(BaseModel):
@@ -104,7 +104,7 @@ class IngestionStats(BaseModel):
     overlap_rescans_total: int = 0
     flood_wait_seconds_total: float = 0.0
     ingest_lag_seconds: float = 0.0
-    last_updated: datetime = Field(default_factory=datetime.utcnow)
+    last_updated: datetime = Field(default_factory=lambda: datetime.utcnow().replace(tzinfo=timezone.utc))
     
     class Config:
         json_encoders = {
