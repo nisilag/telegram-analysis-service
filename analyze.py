@@ -3,7 +3,7 @@ Message analysis pipeline with token extraction and sentiment analysis.
 """
 import re
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Set, Optional
 from concurrent.futures import ThreadPoolExecutor
 
