@@ -112,26 +112,31 @@ class IngestionEngine:
                     current_id = max_id + 1
                     continue
                 
-                # Process batch
-                processed_count = await self._process_message_batch(messages)
+                # Process batch and get the last successfully processed message
+                processed_count, last_processed_message = await self._process_message_batch(messages)
                 total_processed += processed_count
                 
-                # Update checkpoint with the last message in this batch
-                last_message = max(messages, key=lambda m: m.message_id)
-                checkpoint = IngestCheckpoint(
-                    chat_id=self.chat_id,
-                    last_message_id=last_message.message_id,
-                    last_ts_utc=last_message.ts_utc,
-                    updated_at=datetime.utcnow().replace(tzinfo=timezone.utc)
-                )
-                await self.store.update_checkpoint(checkpoint)
+                # Update checkpoint only if we successfully processed at least one message
+                if last_processed_message:
+                    checkpoint = IngestCheckpoint(
+                        chat_id=self.chat_id,
+                        last_message_id=last_processed_message.message_id,
+                        last_ts_utc=last_processed_message.ts_utc,
+                        updated_at=datetime.utcnow().replace(tzinfo=timezone.utc)
+                    )
+                    await self.store.update_checkpoint(checkpoint)
                 
                 # Move to next batch
-                current_id = last_message.message_id + 1
+                if last_processed_message:
+                    current_id = last_processed_message.message_id + 1
+                else:
+                    # If no messages were processed successfully, move to next batch anyway
+                    current_id = max_id + 1
                 
                 # Log progress
                 if total_processed % 100 == 0:
-                    logger.info(f"Backfill progress: {total_processed} messages processed")
+                    current_msg_id = last_processed_message.message_id if last_processed_message else "unknown"
+                    logger.info(f"Backfill progress: {total_processed} messages processed, current message_id: {current_msg_id}")
                 
             except Exception as e:
                 logger.error(f"Error in backfill batch {current_id}-{max_id}: {e}")
@@ -141,9 +146,10 @@ class IngestionEngine:
         
         logger.info(f"Backfill completed: {total_processed} messages processed")
     
-    async def _process_message_batch(self, messages: List[TelegramMessage]) -> int:
-        """Process a batch of messages (store + analyze)."""
+    async def _process_message_batch(self, messages: List[TelegramMessage]) -> tuple[int, Optional[TelegramMessage]]:
+        """Process a batch of messages (store + analyze). Returns (count, last_successful_message)."""
         processed_count = 0
+        last_successful_message = None
         
         for message in messages:
             try:
@@ -157,11 +163,16 @@ class IngestionEngine:
                 self.stats.analyzed_messages_total += 1
                 
                 processed_count += 1
+                last_successful_message = message  # Only update if both operations succeeded
+                
+                # Log progress every 100 messages within this batch
+                if processed_count % 100 == 0:
+                    logger.info(f"Batch progress: {processed_count} messages processed in current batch")
                 
             except Exception as e:
                 logger.error(f"Error processing message {message.message_id}: {e}")
         
-        return processed_count
+        return processed_count, last_successful_message
     
     async def _handle_new_message(self, message: TelegramMessage):
         """Handle a new incoming message."""
@@ -241,7 +252,7 @@ class IngestionEngine:
                 return
             
             # Process messages (this will upsert, so duplicates are handled)
-            processed_count = await self._process_message_batch(messages)
+            processed_count, _ = await self._process_message_batch(messages)
             
             # Check for messages that need re-analysis due to edits
             edited_messages = await self.store.get_messages_needing_reanalysis(self.chat_id)
@@ -279,7 +290,7 @@ class IngestionEngine:
                 start_date, end_date, limit=None
             )
             
-            processed_count = await self._process_message_batch(messages)
+            processed_count, _ = await self._process_message_batch(messages)
             logger.info(f"Manual re-scan completed: {processed_count} messages processed")
             
         except Exception as e:
