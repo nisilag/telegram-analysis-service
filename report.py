@@ -126,9 +126,9 @@ class ReportGenerator:
             if len(data['contributors']) > 8:
                 contributors += f", +{len(data['contributors']) - 8} more"
             
-            # Format key points by sentiment
-            bullish_points = [f"- {point}" for point in data['bullish_points'][:3]]
-            bearish_points = [f"- {point}" for point in data['bearish_points'][:3]]
+            # Format key points by sentiment (filter out None values)
+            bullish_points = [f"- {point}" for point in data['bullish_points'][:3] if point and str(point).strip()]
+            bearish_points = [f"- {point}" for point in data['bearish_points'][:3] if point and str(point).strip()]
             
             key_points = ""
             if bullish_points:
@@ -189,13 +189,14 @@ class ReportGenerator:
                 token_data[token_key]['contributors'].add(username)
                 token_data[token_key]['message_count'] += 1
                 
-                # Categorize key points by sentiment
+                # Categorize key points by sentiment (filter out None/empty values)
+                valid_key_points = [point for point in key_points[:2] if point and str(point).strip()]
                 if sentiment == 'BULLISH':
-                    token_data[token_key]['bullish_points'].extend(key_points[:2])  # Limit points per message
+                    token_data[token_key]['bullish_points'].extend(valid_key_points)
                 elif sentiment == 'BEARISH':
-                    token_data[token_key]['bearish_points'].extend(key_points[:2])
+                    token_data[token_key]['bearish_points'].extend(valid_key_points)
                 else:
-                    token_data[token_key]['neutral_points'].extend(key_points[:2])
+                    token_data[token_key]['neutral_points'].extend(valid_key_points)
         
         # Convert sets to sorted lists and limit points
         for token_key in token_data:
