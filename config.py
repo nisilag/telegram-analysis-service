@@ -19,6 +19,7 @@ class Config(BaseSettings):
     
     # Database configuration
     db_url: str = Field(default="sqlite:///./telegram_analysis.db", description="Database connection URL")
+    postgres_password: Optional[str] = Field(default=None, description="PostgreSQL password (used by Docker Compose)")
     
     # Ingestion settings
     overlap_minutes: int = Field(default=120, description="Minutes to overlap in re-scan")
