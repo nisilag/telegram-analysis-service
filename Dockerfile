@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y \
     g++ \
     git \
     curl \
+    postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user for security
@@ -28,6 +29,9 @@ RUN python -c "from transformers import AutoTokenizer, AutoModelForSequenceClass
 
 # Copy application code
 COPY . .
+
+# Make wait script executable
+RUN chmod +x wait-for-postgres.sh
 
 # Create necessary directories
 RUN mkdir -p /app/data /app/logs && \

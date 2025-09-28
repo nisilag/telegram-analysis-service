@@ -30,6 +30,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    # Wait for PostgreSQL to be ready before starting
+    command: ["./wait-for-postgres.sh", "postgres", "5432", "telegram_user", "telegram_analysis", "python", "app.py"]
     environment:
       # Database connection
       DB_URL: postgresql://telegram_user:${POSTGRES_PASSWORD:-secure_password_change_me}@postgres:5432/telegram_analysis
