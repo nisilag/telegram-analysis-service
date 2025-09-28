@@ -122,7 +122,9 @@ class ReportGenerator:
         table += f"{'-' * 15} | {'-' * 40} | {'-' * 50}\n"
         
         for token, data in token_data.items():
-            contributors = ", ".join(data['contributors'][:8])  # Limit to 8 contributors
+            # Filter out None values from contributors
+            valid_contributors = [str(c) for c in data['contributors'][:8] if c is not None]
+            contributors = ", ".join(valid_contributors)  # Limit to 8 contributors
             if len(data['contributors']) > 8:
                 contributors += f", +{len(data['contributors']) - 8} more"
             
@@ -170,11 +172,14 @@ class ReportGenerator:
             if not tokens:
                 continue
                 
-            username = msg.get('from_username', 'Unknown')
+            username = msg.get('from_username') or 'Unknown'  # Handle None usernames
             sentiment = msg.get('sentiment', 'NEUTRAL')
             key_points = msg.get('key_points', [])
             
             for token in tokens:
+                if not token:  # Skip None/empty tokens
+                    continue
+                    
                 token_key = f"${token}"
                 
                 if token_key not in token_data:
@@ -239,9 +244,9 @@ class ReportGenerator:
                         'text': msg['text'],
                         'is_investment': msg.get('is_investment', False),
                         'sentiment': msg.get('sentiment', ''),
-                        'tokens': ', '.join(msg.get('tokens', [])),
+                        'tokens': ', '.join([str(t) for t in msg.get('tokens', []) if t is not None]),
                         'topic_key': msg.get('topic_key', ''),
-                        'key_points': '; '.join(msg.get('key_points', []))
+                        'key_points': '; '.join([str(p) for p in msg.get('key_points', []) if p is not None])
                     })
             
             logger.info(f"CSV export created: {filepath}")
