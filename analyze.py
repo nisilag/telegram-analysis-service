@@ -184,6 +184,13 @@ class MessageAnalyzer:
             sentiment = sentiment_map.get(best_result['label'].lower(), SentimentType.NEUTRAL)
             confidence = best_result['score']
             
+            # Apply keyword-based sentiment enhancement for NEUTRAL predictions
+            if sentiment == SentimentType.NEUTRAL or confidence < config.confidence_threshold:
+                enhanced_sentiment = self._enhance_sentiment_with_keywords(text)
+                if enhanced_sentiment != SentimentType.NEUTRAL:
+                    # Use keyword-based sentiment with boosted confidence
+                    return enhanced_sentiment, max(confidence, 0.6)
+            
             # Only return non-neutral if confidence is above threshold
             if confidence < config.confidence_threshold:
                 sentiment = SentimentType.NEUTRAL
@@ -193,6 +200,61 @@ class MessageAnalyzer:
         except Exception as e:
             logger.error(f"Error in sentiment analysis: {e}")
             return SentimentType.NEUTRAL, 0.0
+    
+    def _enhance_sentiment_with_keywords(self, text: str) -> SentimentType:
+        """
+        Enhance sentiment analysis using keyword patterns for financial content.
+        
+        This helps override FinBERT's conservative NEUTRAL predictions when
+        clear directional language is present.
+        """
+        text_lower = text.lower()
+        
+        # Strong bullish indicators
+        bullish_patterns = [
+            # Price action
+            r'\b(moon|mooning|pump|pumping|rally|rallying|breakout|breaking out)\b',
+            r'\b(bullish|bull run|bull market|going up|uptrend|up trend)\b',
+            r'\b(buy|buying|long|longing|accumulate|accumulating)\b',
+            r'\b(target|targets|price target|tp|take profit)\b',
+            r'\b(strong|strength|momentum|explosive|parabolic)\b',
+            r'\b(ath|all.?time.?high|new high|higher high)\b',
+            
+            # Positive sentiment
+            r'\b(love|loving|like|liking|bullish on|confident)\b',
+            r'\b(gem|alpha|opportunity|potential|undervalued)\b',
+            r'\b(rocket|lambo|diamond hands|hodl|hold)\b'
+        ]
+        
+        # Strong bearish indicators  
+        bearish_patterns = [
+            # Price action
+            r'\b(dump|dumping|crash|crashing|drop|dropping|fall|falling)\b',
+            r'\b(bearish|bear market|going down|downtrend|down trend)\b',
+            r'\b(sell|selling|short|shorting|exit|exiting)\b',
+            r'\b(rekt|liquidated|liquidation|stop loss|sl)\b',
+            r'\b(weak|weakness|bleeding|red|correction)\b',
+            r'\b(resistance|rejection|failed|failure)\b',
+            
+            # Negative sentiment
+            r'\b(hate|hating|avoid|avoiding|stay away|bearish on)\b',
+            r'\b(overvalued|bubble|scam|rug|rugpull|dead)\b',
+            r'\b(paper hands|panic|fear|fud)\b'
+        ]
+        
+        # Count pattern matches
+        bullish_score = sum(1 for pattern in bullish_patterns 
+                           if re.search(pattern, text_lower))
+        bearish_score = sum(1 for pattern in bearish_patterns 
+                           if re.search(pattern, text_lower))
+        
+        # Determine sentiment based on pattern strength
+        if bullish_score > bearish_score and bullish_score >= 1:
+            return SentimentType.BULLISH
+        elif bearish_score > bullish_score and bearish_score >= 1:
+            return SentimentType.BEARISH
+        else:
+            return SentimentType.NEUTRAL
     
     def _generate_topic_key(self, tokens: List[str], text: str) -> str:
         """
