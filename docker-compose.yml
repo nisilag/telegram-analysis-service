@@ -31,7 +31,7 @@ services:
       postgres:
         condition: service_healthy
     # Wait for PostgreSQL to be ready before starting
-    command: ["./wait-for-postgres.sh", "postgres", "5432", "telegram_user", "telegram_analysis", "python", "app.py"]
+    command: ["sh", "-c", "./wait-for-postgres.sh postgres 5432 telegram_user telegram_analysis \"$$POSTGRES_PASSWORD\" python app.py"]
     environment:
       # Database connection
       DB_URL: postgresql://telegram_user:${POSTGRES_PASSWORD:-secure_password_change_me}@postgres:5432/telegram_analysis
@@ -56,6 +56,9 @@ services:
       RATE_LIMIT_DELAY: ${RATE_LIMIT_DELAY:-1.0}
       MODEL_VERSION: ${MODEL_VERSION:-1}
       CONFIDENCE_THRESHOLD: ${CONFIDENCE_THRESHOLD:-0.7}
+      
+      # PostgreSQL password for wait script
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secure_password_change_me}
     volumes:
       # Persistent data
       - session_data:/app/data
