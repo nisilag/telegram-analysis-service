@@ -56,7 +56,7 @@ class TelegramClientWrapper:
                     chat_id=self.target_chat_id,
                     message_id=message.id,
                     ts_utc=message.date.replace(tzinfo=timezone.utc),
-                    created_at=datetime.utcnow()
+                    created_at=datetime.utcnow().replace(tzinfo=timezone.utc)
                 )
             
             # If no messages found, return a default
@@ -64,7 +64,7 @@ class TelegramClientWrapper:
                 chat_id=self.target_chat_id,
                 message_id=0,
                 ts_utc=datetime.utcnow().replace(tzinfo=timezone.utc),
-                created_at=datetime.utcnow()
+                created_at=datetime.utcnow().replace(tzinfo=timezone.utc)
             )
             
         except Exception as e:
