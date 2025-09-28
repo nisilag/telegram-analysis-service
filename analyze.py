@@ -154,12 +154,18 @@ class MessageAnalyzer:
             return SentimentType.NEUTRAL, 0.0
         
         try:
-            # Truncate text if too long (FinBERT has token limits)
-            if len(text) > 512:
-                text = text[:512]
-            
+            # Properly truncate text using tokenizer (FinBERT has 512 token limit)
             def run_sentiment():
-                results = self.sentiment_pipeline(text)
+                # Use tokenizer to properly truncate to 512 tokens
+                if self.tokenizer:
+                    # Tokenize and truncate to max 510 tokens (leaving room for special tokens)
+                    tokens = self.tokenizer.encode(text, truncation=True, max_length=510)
+                    truncated_text = self.tokenizer.decode(tokens, skip_special_tokens=True)
+                else:
+                    # Fallback: naive character truncation (less accurate)
+                    truncated_text = text[:400]  # Conservative character limit
+                
+                results = self.sentiment_pipeline(truncated_text)
                 return results[0]  # Get first (and only) result
             
             # Run sentiment analysis in thread pool
