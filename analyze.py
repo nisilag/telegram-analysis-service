@@ -24,7 +24,9 @@ class MessageAnalyzer:
         self.model = None
         self.sentiment_pipeline = None
         self.executor = ThreadPoolExecutor(max_workers=2)
-        self._token_pattern = re.compile(r'\$([A-Z0-9_]{2,10})\b')
+        # Pattern for crypto tokens - must start with a letter, not a number
+        # This prevents matching dollar amounts like $10M, $5B, etc.
+        self._token_pattern = re.compile(r'\$([A-Z][A-Z0-9_]{1,9})\b')
         self._finance_pattern = self._build_finance_pattern()
         
     def _build_finance_pattern(self) -> re.Pattern:
@@ -109,7 +111,13 @@ class MessageAnalyzer:
         
         # Find cashtags ($TOKEN)
         matches = self._token_pattern.findall(text.upper())
-        tokens.update(matches)
+        
+        # Filter out common monetary suffixes that aren't crypto tokens
+        monetary_suffixes = {'K', 'M', 'B', 'T', 'MIL', 'BIL', 'TRIL'}
+        for match in matches:
+            # Skip if it's just a monetary suffix
+            if match not in monetary_suffixes:
+                tokens.add(match)
         
         # Check for token aliases
         text_upper = text.upper()
