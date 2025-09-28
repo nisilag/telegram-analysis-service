@@ -113,7 +113,7 @@ class IngestionEngine:
                     continue
                 
                 # Process batch and get the last successfully processed message
-                processed_count, last_processed_message = await self._process_message_batch(messages)
+                processed_count, last_processed_message = await self._process_message_batch(messages, total_processed)
                 total_processed += processed_count
                 
                 # Update checkpoint only if we successfully processed at least one message
@@ -146,7 +146,7 @@ class IngestionEngine:
         
         logger.info(f"Backfill completed: {total_processed} messages processed")
     
-    async def _process_message_batch(self, messages: List[TelegramMessage]) -> tuple[int, Optional[TelegramMessage]]:
+    async def _process_message_batch(self, messages: List[TelegramMessage], global_processed_count: int = 0) -> tuple[int, Optional[TelegramMessage]]:
         """Process a batch of messages (store + analyze). Returns (count, last_successful_message)."""
         processed_count = 0
         last_successful_message = None
@@ -165,9 +165,10 @@ class IngestionEngine:
                 processed_count += 1
                 last_successful_message = message  # Only update if both operations succeeded
                 
-                # Log progress every 100 messages within this batch
-                if processed_count % 100 == 0:
-                    logger.info(f"Batch progress: {processed_count} messages processed in current batch")
+                # Log progress every 100 messages globally
+                total_so_far = global_processed_count + processed_count
+                if total_so_far % 100 == 0:
+                    logger.info(f"Processing progress: {total_so_far} messages processed, current message_id: {message.message_id}")
                 
             except Exception as e:
                 logger.error(f"Error processing message {message.message_id}: {e}")
