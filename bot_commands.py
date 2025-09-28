@@ -272,15 +272,15 @@ This generates an enhanced report showing tokens, contributors, and sentiment-ca
             # Delete status message
             await status_msg.delete()
             
-            # Send report (split if too long)
+            # Send report with pagination (limit to 5 tokens per page for readability)
             if len(token_report) > 4000:  # Telegram message limit
                 # Split the report into chunks
-                chunks = self._split_message(token_report, 4000)
+                chunks = self._split_message(token_report, 3500)  # Smaller chunks for better readability
                 for i, chunk in enumerate(chunks):
                     if i == 0:
                         await event.reply(chunk)
                     else:
-                        await event.reply(f"**Continued ({i+1}/{len(chunks)}):**\n\n{chunk}")
+                        await event.reply(f"**📊 Token Report - Page {i+1}/{len(chunks)}**\n\n{chunk}")
             else:
                 await event.reply(token_report)
                 

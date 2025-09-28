@@ -116,48 +116,55 @@ class ReportGenerator:
         if not token_data:
             return header + summary + "No investment-related tokens found in this period.\n"
         
-        # Create the main table
-        table = "```\n"
-        table += f"{'Investment Topic':<15} | {'Account':<40} | {'Key Points'}\n"
-        table += f"{'-' * 15} | {'-' * 40} | {'-' * 50}\n"
+        # Format tokens in a clean, readable way
+        token_list = ""
+        for i, (token, data) in enumerate(token_data.items(), 1):
+            # Get contributors (limit to 4 for readability)
+            valid_contributors = [str(c) for c in data['contributors'][:4] if c is not None]
+            contributors = ", ".join(valid_contributors)
+            if len(data['contributors']) > 4:
+                contributors += f" +{len(data['contributors']) - 4} more"
+            
+            # Count mentions
+            mention_count = data['message_count']
+            
+            # Get sentiment breakdown
+            bullish_count = len(data['bullish_points'])
+            bearish_count = len(data['bearish_points'])
+            
+            # Format sentiment summary
+            sentiment_summary = []
+            if bullish_count > 0:
+                sentiment_summary.append(f"🟢 {bullish_count} bullish")
+            if bearish_count > 0:
+                sentiment_summary.append(f"🔴 {bearish_count} bearish")
+            if not sentiment_summary:
+                sentiment_summary.append("⚪ neutral")
+            
+            sentiment_text = ", ".join(sentiment_summary)
+            
+            # Add token entry
+            token_list += f"**{i}. {token}** ({mention_count} mentions)\n"
+            token_list += f"   👥 Contributors: {contributors}\n"
+            token_list += f"   📊 Sentiment: {sentiment_text}\n"
+            
+            # Add top insights if available
+            insights = []
+            if data['bullish_points']:
+                insights.extend([f"🟢 {point[:60]}..." if len(point) > 60 else f"🟢 {point}" 
+                               for point in data['bullish_points'][:2]])
+            if data['bearish_points']:
+                insights.extend([f"🔴 {point[:60]}..." if len(point) > 60 else f"🔴 {point}" 
+                               for point in data['bearish_points'][:2]])
+            
+            if insights:
+                token_list += f"   💡 Key insights:\n"
+                for insight in insights[:3]:  # Max 3 insights per token
+                    token_list += f"      {insight}\n"
+            
+            token_list += "\n"
         
-        for token, data in token_data.items():
-            # Filter out None values from contributors
-            valid_contributors = [str(c) for c in data['contributors'][:8] if c is not None]
-            contributors = ", ".join(valid_contributors)  # Limit to 8 contributors
-            if len(data['contributors']) > 8:
-                contributors += f", +{len(data['contributors']) - 8} more"
-            
-            # Format key points by sentiment (filter out None values)
-            bullish_points = [f"- {point}" for point in data['bullish_points'][:3] if point and str(point).strip()]
-            bearish_points = [f"- {point}" for point in data['bearish_points'][:3] if point and str(point).strip()]
-            
-            key_points = ""
-            if bullish_points:
-                key_points += "BULLISH\\n" + "\\n".join(bullish_points)
-            if bearish_points:
-                if key_points:
-                    key_points += "\\n"
-                key_points += "BEARISH\\n" + "\\n".join(bearish_points)
-            
-            if not key_points:
-                key_points = "NEUTRAL\\n- No strong sentiment detected"
-            
-            # Format the row (handle multi-line key points)
-            lines = key_points.split("\\n")
-            first_line = lines[0] if lines else ""
-            
-            table += f"{token:<15} | {contributors:<40} | {first_line}\n"
-            
-            # Add remaining key points lines
-            for line in lines[1:]:
-                table += f"{'':<15} | {'':<40} | {line}\n"
-            
-            table += f"{'-' * 15} | {'-' * 40} | {'-' * 50}\n"
-        
-        table += "```\n"
-        
-        return header + summary + table
+        return header + summary + token_list
     
     def _group_messages_by_token(self, messages: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
         """Group messages by token and aggregate data."""
