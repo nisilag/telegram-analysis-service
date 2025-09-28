@@ -186,6 +186,10 @@ class ReportGenerator:
                 sentiment_str = sentiment.value
             else:
                 sentiment_str = str(sentiment) if sentiment else 'NEUTRAL'
+            
+            # Debug logging - remove after fixing
+            if sentiment_str in ['BULLISH', 'BEARISH']:
+                print(f"DEBUG: Found {sentiment_str} sentiment for tokens {tokens}")
                 
             key_points = msg.get('key_points', [])
             
