@@ -31,13 +31,23 @@ class TelegramAnalysisService:
         
         # Initialize database store
         logger.info("Initializing database...")
-        self.store = DatabaseStore()
-        await self.store.initialize()
+        try:
+            self.store = DatabaseStore()
+            await self.store.initialize()
+            logger.info("Database initialization completed successfully")
+        except Exception as e:
+            logger.error(f"Database initialization failed: {e}")
+            raise
         
         # Initialize Telegram client
         logger.info("Initializing Telegram client...")
-        self.tg_client = TelegramClientWrapper()
-        await self.tg_client.initialize()
+        try:
+            self.tg_client = TelegramClientWrapper()
+            await self.tg_client.initialize()
+            logger.info("Telegram client initialization completed successfully")
+        except Exception as e:
+            logger.error(f"Telegram client initialization failed: {e}")
+            raise
         
         # Validate chat access
         success, message = await self.tg_client.validate_chat_access()
