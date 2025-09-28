@@ -22,23 +22,23 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Pre-download FinBERT model to reduce startup time
-RUN python -c "from transformers import AutoTokenizer, AutoModelForSequenceClassification; \
-    AutoTokenizer.from_pretrained('ProsusAI/finbert'); \
-    AutoModelForSequenceClassification.from_pretrained('ProsusAI/finbert')"
-
 # Copy application code
 COPY . .
 
 # Make wait script executable
 RUN chmod +x wait-for-postgres.sh
 
-# Create necessary directories
-RUN mkdir -p /app/data /app/logs && \
-    chown -R telegram:telegram /app
+# Create necessary directories and set up cache directory
+RUN mkdir -p /app/data /app/logs /home/telegram/.cache && \
+    chown -R telegram:telegram /app /home/telegram
 
 # Switch to non-root user
 USER telegram
+
+# Pre-download FinBERT model as telegram user to ensure proper permissions
+RUN python -c "from transformers import AutoTokenizer, AutoModelForSequenceClassification; \
+    AutoTokenizer.from_pretrained('ProsusAI/finbert'); \
+    AutoModelForSequenceClassification.from_pretrained('ProsusAI/finbert')"
 
 # Health check endpoint (optional)
 EXPOSE 8080
