@@ -324,7 +324,15 @@ class MessageAnalyzer:
                 else:
                     sentiment_context = "\nSentiment: This message is NEUTRAL about the tokens."
             
-            prompt = f"""Extract 1-2 KEY crypto insights from this message about {tokens_str}. Focus on insights that could be mentioned by multiple people.{sentiment_context}
+            # Handle multi-token messages more carefully
+            if len(tokens) > 3:
+                tokens_context = f"This message mentions many tokens ({tokens_str}). Extract only GENERAL market insights that apply broadly, not token-specific insights."
+            elif len(tokens) > 1:
+                tokens_context = f"This message mentions multiple tokens ({tokens_str}). Extract insights that are clearly about ALL these tokens or the general market, not specific to just one token."
+            else:
+                tokens_context = f"This message is specifically about {tokens_str}."
+            
+            prompt = f"""Extract 1-2 KEY crypto insights from this message. {tokens_context}{sentiment_context}
 
 Message: "{text[:400]}"
 
@@ -332,14 +340,15 @@ Rules:
 - Output ONLY short phrases (2-6 words)
 - Focus on REPEATABLE insights: team quality, backing, partnerships, scandals
 - Match the sentiment context - if bullish, extract positive aspects; if bearish, extract negative aspects
+- For multi-token messages: Extract only insights that apply to ALL tokens mentioned or general market insights
+- Avoid token-specific insights when multiple tokens are mentioned
 - Avoid unique price predictions or personal opinions
-- Look for: founder backing, team reputation, major partnerships, legal issues, technical developments
 - One insight per line, no bullets or numbers
 - Maximum 2 insights
 
 Good examples:
-Bullish: "CZ backing", "Proven team", "Major partnership", "Strong fundamentals"
-Bearish: "Founder imprisoned", "Regulatory issues", "Team reputation concerns", "Partnership delays"
+Single token: "CZ backing", "Proven team", "Major partnership", "Strong fundamentals"
+Multi-token: "Market momentum strong", "CEX adoption growing", "Regulatory clarity improving"
 
 Insights:"""
             
