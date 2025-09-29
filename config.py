@@ -30,6 +30,12 @@ class Config(BaseSettings):
     model_version: int = Field(default=1, description="Analysis model version")
     confidence_threshold: float = Field(default=0.7, description="Minimum confidence for analysis")
     
+    # LLM settings for crypto insights
+    ollama_base_url: str = Field(default="http://localhost:11434", description="Ollama API base URL")
+    ollama_model: str = Field(default="llama3.2:3b", description="Ollama model to use")
+    ollama_timeout: int = Field(default=15, description="Ollama request timeout in seconds")
+    enable_llm_insights: bool = Field(default=True, description="Enable LLM-based crypto insights extraction")
+    
     # Bot settings (optional)
     bot_token: Optional[str] = Field(default=None, description="Telegram bot token for commands")
     admin_user_ids: Optional[str] = Field(default="", description="Admin user IDs (comma-separated)")

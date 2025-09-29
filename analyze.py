@@ -4,16 +4,17 @@ Message analysis pipeline with token extraction and sentiment analysis.
 import re
 import asyncio
 from datetime import datetime, timezone
-from typing import List, Set, Optional
-from concurrent.futures import ThreadPoolExecutor
+import json
+from typing import List, Optional
+from datetime import datetime, timezone
 
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import torch
-from transformers import AutoTokenizer, AutoModelForSequenceClassification, pipeline
+import aiohttp
 from loguru import logger
 
 from models import TelegramMessage, MessageAnalysis, SentimentType
 from config import config, FINANCE_KEYWORDS, TOKEN_ALIASES
-
 
 class MessageAnalyzer:
     """Analyzes Telegram messages for investment relevance and sentiment."""
@@ -89,8 +90,15 @@ class MessageAnalyzer:
         # Generate topic key
         topic_key = self._generate_topic_key(tokens, text)
         
-        # Extract key points
-        key_points = self._extract_key_points(text)
+        # Extract key points using LLM if investment-related
+        if is_investment:
+            try:
+                key_points = await self._extract_crypto_insights_with_llm(text, tokens)
+            except Exception as e:
+                logger.warning(f"LLM key points extraction failed: {e}")
+                key_points = self._extract_key_points_fallback(text)
+        else:
+            key_points = []
         
         return MessageAnalysis(
             chat_id=message.chat_id,
@@ -289,11 +297,101 @@ class MessageAnalyzer:
         
         return "GENERAL"
     
-    def _extract_key_points(self, text: str) -> List[str]:
+    async def _extract_crypto_insights_with_llm(self, text: str, tokens: List[str]) -> List[str]:
         """
-        Extract key points from the message text.
+        Extract Grok-style crypto insights using local Llama model.
+        """
+        if not config.enable_llm_insights:
+            return self._extract_key_points_fallback(text)
+            
+        try:
+            # Prepare the prompt
+            tokens_str = ", ".join(tokens) if tokens else "None detected"
+            prompt = f"""Extract 1-2 concise crypto investment insights from this message.
+Focus on: price targets, market positioning, fundamentals, performance, competitive dynamics.
+Format: 4-8 words max per insight, no filler words.
+
+Examples:
+- "BTC to 600K goal"
+- "SOL vamping ETH ecosystem"
+- "Constant buybacks from revenue"
+- "First mover in robotics"
+- "Up 60% in 24h"
+
+Message: {text[:500]}
+Tokens mentioned: {tokens_str}
+
+Insights:"""
+
+            # Call Ollama API
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=config.ollama_timeout)) as session:
+                payload = {
+                    "model": config.ollama_model,
+                    "prompt": prompt,
+                    "stream": False,
+                    "options": {
+                        "temperature": 0.3,
+                        "top_p": 0.9,
+                        "max_tokens": 100
+                    }
+                }
+                
+                async with session.post(f"{config.ollama_base_url}/api/generate", json=payload) as response:
+                    if response.status == 200:
+                        result = await response.json()
+                        insights_text = result.get("response", "").strip()
+                        
+                        # Parse insights from response
+                        insights = self._parse_llm_insights(insights_text)
+                        if insights:
+                            logger.debug(f"LLM extracted insights: {insights}")
+                            return insights
+                        else:
+                            logger.debug("LLM returned no valid insights, using fallback")
+                            return self._extract_key_points_fallback(text)
+                    else:
+                        logger.warning(f"Ollama API error: {response.status}")
+                        return self._extract_key_points_fallback(text)
+                        
+        except Exception as e:
+            logger.warning(f"LLM insight extraction failed: {e}, using fallback")
+            return self._extract_key_points_fallback(text)
+    
+    def _parse_llm_insights(self, llm_response: str) -> List[str]:
+        """
+        Parse and validate insights from LLM response.
+        """
+        if not llm_response:
+            return []
+            
+        # Split by lines and clean up
+        lines = [line.strip() for line in llm_response.split('\n') if line.strip()]
+        insights = []
         
-        Returns concise bullet points with URLs and emojis stripped.
+        for line in lines:
+            # Remove bullet points and numbering
+            line = re.sub(r'^[-•*\d+\.\)\s]+', '', line).strip()
+            
+            # Skip empty lines or lines that are too long/short
+            if not line or len(line) < 10 or len(line) > 80:
+                continue
+                
+            # Skip lines that don't look like insights
+            if any(skip_word in line.lower() for skip_word in [
+                'here are', 'based on', 'the message', 'insights:', 'analysis:'
+            ]):
+                continue
+                
+            # Clean up the insight
+            line = line.strip('"\'')
+            if line:
+                insights.append(line)
+                
+        return insights[:2]  # Max 2 insights
+    
+    def _extract_key_points_fallback(self, text: str) -> List[str]:
+        """
+        Fallback key points extraction using pattern matching.
         """
         if not text.strip():
             return []
@@ -302,48 +400,65 @@ class MessageAnalyzer:
         cleaned_text = re.sub(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', '', text)
         cleaned_text = re.sub(r'[^\w\s\.,!?$%\-]', '', cleaned_text)
         
-        # Filter out newsletter/spam patterns
-        spam_patterns = [
-            r'new edition.*newsletter',
-            r'top \d+ mindshare',
-            r'ive published.*newsletter',
-            r'trading.*investing.*indicators',
-            r'see how i.*',
-            r'subscribe.*',
-            r'follow.*for.*updates'
+        # Extract crypto-specific patterns
+        insights = []
+        
+        # Price targets: "BTC to 100K", "target $50"
+        price_patterns = [
+            r'(\$?\w+)\s+to\s+\$?(\d+[KMB]?)',
+            r'target\s+\$?(\d+[KMB]?)',
+            r'(\$?\w+)\s+(\d+[KMB]?)\s+MC'
         ]
         
-        # Check if this looks like newsletter spam
-        text_lower = cleaned_text.lower()
-        if any(re.search(pattern, text_lower) for pattern in spam_patterns):
-            # For newsletter content, extract only token-specific insights
-            token_sentences = []
+        for pattern in price_patterns:
+            matches = re.finditer(pattern, cleaned_text, re.IGNORECASE)
+            for match in matches:
+                if len(match.group(0)) < 50:
+                    insights.append(match.group(0).strip())
+        
+        # Performance indicators
+        perf_patterns = [
+            r'up\s+\d+%',
+            r'\w+\s+outperforms\s+\w+',
+            r'\w+\s+flips\s+\w+',
+            r'\w+\s+vamping\s+\w+'
+        ]
+        
+        for pattern in perf_patterns:
+            matches = re.finditer(pattern, cleaned_text, re.IGNORECASE)
+            for match in matches:
+                if len(match.group(0)) < 50:
+                    insights.append(match.group(0).strip())
+        
+        # If no patterns found, fall back to sentence extraction
+        if not insights:
             sentences = re.split(r'[.!?]+', cleaned_text)
-            for sentence in sentences:
-                if any(token in sentence.upper() for token in ['$', 'BTC', 'ETH', 'SOL', 'BULLISH', 'BEARISH', 'PUMP', 'DUMP']):
-                    if len(sentence.strip()) > 15:
-                        token_sentences.append(sentence.strip())
-            return token_sentences[:2]  # Limit to 2 token-specific points
+            sentences = [s.strip() for s in sentences if s.strip() and len(s.strip()) > 15]
+            
+            for sentence in sentences[:2]:
+                if len(sentence) > 20 and len(sentence) < 100:
+                    if any(token in sentence.upper() for token in ['$', 'BTC', 'ETH', 'SOL', 'BULLISH', 'BEARISH']):
+                        insights.append(sentence)
         
-        # Split into sentences
-        sentences = re.split(r'[.!?]+', cleaned_text)
-        sentences = [s.strip() for s in sentences if s.strip() and len(s.strip()) > 15]
-        
-        # Take up to 3 most meaningful sentences
-        key_points = []
-        for sentence in sentences[:3]:
-            if len(sentence) > 20:  # Only meaningful sentences
-                # Skip generic phrases
-                if not any(generic in sentence.lower() for generic in [
-                    'honestly asking', 'what do you think', 'let me know', 'thoughts?',
-                    'anyone else', 'does anyone', 'what are your'
-                ]):
-                    # Truncate if too long
-                    if len(sentence) > 120:
-                        sentence = sentence[:117] + "..."
-                    key_points.append(sentence)
-        
-        return key_points
+        return insights[:2]  # Max 2 insights
+    
+    def _extract_key_points(self, text: str) -> List[str]:
+        """
+        Main entry point for key points extraction.
+        """
+        # This will be called synchronously, so we need to handle async LLM call
+        try:
+            import asyncio
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # We're in an async context, create a task
+                return self._extract_key_points_fallback(text)
+            else:
+                # We can run async
+                return loop.run_until_complete(self._extract_crypto_insights_with_llm(text, []))
+        except Exception as e:
+            logger.warning(f"Error in key points extraction: {e}")
+            return self._extract_key_points_fallback(text)
     
     async def close(self):
         """Clean up resources."""
