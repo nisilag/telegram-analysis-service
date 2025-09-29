@@ -99,7 +99,7 @@ class MessageAnalyzer:
         # Extract key points using Groq if investment-related
         if is_investment:
             try:
-                key_points = await self._extract_crypto_insights_with_groq(text, tokens)
+                key_points = await self._extract_crypto_insights_with_groq(text, tokens, sentiment)
             except Exception as e:
                 logger.warning(f"Groq key points extraction failed: {e}")
                 key_points = self._extract_key_points_fallback(text)
@@ -303,7 +303,7 @@ class MessageAnalyzer:
         
         return "GENERAL"
     
-    async def _extract_crypto_insights_with_groq(self, text: str, tokens: List[str]) -> List[str]:
+    async def _extract_crypto_insights_with_groq(self, text: str, tokens: List[str], sentiment: SentimentType = None) -> List[str]:
         """
         Extract consolidatable crypto insights using Groq API.
         """
@@ -313,25 +313,33 @@ class MessageAnalyzer:
         try:
             # Prepare the prompt for consolidatable insights
             tokens_str = ", ".join(tokens) if tokens else "crypto tokens"
-            prompt = f"""Extract 1-2 KEY crypto insights from this message about {tokens_str}. Focus on insights that could be mentioned by multiple people.
+            # Add sentiment context to prompt
+            sentiment_context = ""
+            if sentiment:
+                sentiment_str = str(sentiment).lower()
+                if sentiment_str == "bullish":
+                    sentiment_context = "\nSentiment: This message is BULLISH/POSITIVE about the tokens. Extract insights that explain WHY it's positive."
+                elif sentiment_str == "bearish":
+                    sentiment_context = "\nSentiment: This message is BEARISH/NEGATIVE about the tokens. Extract insights that explain WHY it's negative."
+                else:
+                    sentiment_context = "\nSentiment: This message is NEUTRAL about the tokens."
+            
+            prompt = f"""Extract 1-2 KEY crypto insights from this message about {tokens_str}. Focus on insights that could be mentioned by multiple people.{sentiment_context}
 
 Message: "{text[:400]}"
 
 Rules:
 - Output ONLY short phrases (2-6 words)
 - Focus on REPEATABLE insights: team quality, backing, partnerships, scandals
+- Match the sentiment context - if bullish, extract positive aspects; if bearish, extract negative aspects
 - Avoid unique price predictions or personal opinions
 - Look for: founder backing, team reputation, major partnerships, legal issues, technical developments
 - One insight per line, no bullets or numbers
 - Maximum 2 insights
 
 Good examples:
-- "CZ backing"
-- "Proven team"
-- "Major partnership"
-- "Founder imprisoned"
-- "Strong fundamentals"
-- "Regulatory issues"
+Bullish: "CZ backing", "Proven team", "Major partnership", "Strong fundamentals"
+Bearish: "Founder imprisoned", "Regulatory issues", "Team reputation concerns", "Partnership delays"
 
 Insights:"""
             
