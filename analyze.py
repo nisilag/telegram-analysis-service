@@ -400,65 +400,68 @@ Insights:"""
         cleaned_text = re.sub(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', '', text)
         cleaned_text = re.sub(r'[^\w\s\.,!?$%\-]', '', cleaned_text)
         
-        # Extract crypto-specific patterns
+        # Extract crypto-specific patterns with better logic
         insights = []
         
-        # Price targets: "BTC to 100K", "target $50"
+        # Price targets: "BTC to 100K", "SOL to $350", "target $50"
         price_patterns = [
-            r'(\$?\w+)\s+to\s+\$?(\d+[KMB]?)',
+            r'\$?([A-Z]{2,6})\s+to\s+\$?(\d+[KMB]?)',
             r'target\s+\$?(\d+[KMB]?)',
-            r'(\$?\w+)\s+(\d+[KMB]?)\s+MC'
+            r'\$?([A-Z]{2,6})\s+(\d+[KMB]?)\s+MC'
         ]
         
         for pattern in price_patterns:
             matches = re.finditer(pattern, cleaned_text, re.IGNORECASE)
             for match in matches:
-                if len(match.group(0)) < 50:
-                    insights.append(match.group(0).strip())
+                full_match = match.group(0).strip()
+                if len(full_match) < 30 and len(full_match) > 5:
+                    insights.append(full_match)
         
-        # Performance indicators
+        # Performance indicators: "up 60%", "SOL outperforms ETH"
         perf_patterns = [
-            r'up\s+\d+%',
-            r'\w+\s+outperforms\s+\w+',
-            r'\w+\s+flips\s+\w+',
-            r'\w+\s+vamping\s+\w+'
+            r'up\s+\d+%(?:\s+in\s+\w+)?',
+            r'\$?([A-Z]{2,6})\s+(?:outperforms?|flips?|vamping?)\s+\$?([A-Z]{2,6})',
+            r'(?:bullish|bearish)\s+on\s+\$?([A-Z]{2,6})',
+            r'\$?([A-Z]{2,6})\s+(?:pumping?|dumping?)'
         ]
         
         for pattern in perf_patterns:
             matches = re.finditer(pattern, cleaned_text, re.IGNORECASE)
             for match in matches:
-                if len(match.group(0)) < 50:
-                    insights.append(match.group(0).strip())
+                full_match = match.group(0).strip()
+                if len(full_match) < 40 and len(full_match) > 5:
+                    insights.append(full_match)
         
-        # If no patterns found, fall back to sentence extraction
-        if not insights:
-            sentences = re.split(r'[.!?]+', cleaned_text)
-            sentences = [s.strip() for s in sentences if s.strip() and len(s.strip()) > 15]
-            
-            for sentence in sentences[:2]:
-                if len(sentence) > 20 and len(sentence) < 100:
-                    if any(token in sentence.upper() for token in ['$', 'BTC', 'ETH', 'SOL', 'BULLISH', 'BEARISH']):
-                        insights.append(sentence)
+        # Fundamental catalysts: "token buybacks", "revenue generation"
+        fundamental_patterns = [
+            r'(?:token\s+)?buybacks?',
+            r'revenue\s+generation',
+            r'first\s+mover',
+            r'enterprise\s+contracts?',
+            r'whale\s+accumulation',
+            r'ETF\s+(?:launch|filing)'
+        ]
         
-        return insights[:2]  # Max 2 insights
+        for pattern in fundamental_patterns:
+            matches = re.finditer(pattern, cleaned_text, re.IGNORECASE)
+            for match in matches:
+                # Get surrounding context (up to 30 chars before and after)
+                start = max(0, match.start() - 15)
+                end = min(len(cleaned_text), match.end() + 15)
+                context = cleaned_text[start:end].strip()
+                if len(context) < 50 and len(context) > 10:
+                    insights.append(context)
+        
+        # Remove duplicates and return best insights
+        unique_insights = list(dict.fromkeys(insights))  # Preserve order, remove dupes
+        return unique_insights[:2]  # Max 2 insights
     
     def _extract_key_points(self, text: str) -> List[str]:
         """
         Main entry point for key points extraction.
         """
-        # This will be called synchronously, so we need to handle async LLM call
-        try:
-            import asyncio
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # We're in an async context, create a task
-                return self._extract_key_points_fallback(text)
-            else:
-                # We can run async
-                return loop.run_until_complete(self._extract_crypto_insights_with_llm(text, []))
-        except Exception as e:
-            logger.warning(f"Error in key points extraction: {e}")
-            return self._extract_key_points_fallback(text)
+        # Always use enhanced pattern matching (LLM disabled for performance)
+        return self._extract_key_points_fallback(text)
     
     async def close(self):
         """Clean up resources."""
