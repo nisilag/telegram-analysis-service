@@ -31,14 +31,20 @@ services:
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
+      - ./init-ollama.sh:/init-ollama.sh:ro
     networks:
       - telegram_network
+    command: >
+      sh -c "ollama serve &
+      sleep 10 &&
+      ollama pull llama3.2:3b &&
+      wait"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/version"]
+      test: ["CMD", "ollama", "list", "|", "grep", "llama3.2"]
       interval: 30s
       timeout: 10s
-      retries: 5
-      start_period: 60s
+      retries: 10
+      start_period: 300s
 
   app:
     build: .

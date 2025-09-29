@@ -3,12 +3,12 @@ Message analysis pipeline with token extraction and sentiment analysis.
 """
 import re
 import asyncio
-from datetime import datetime, timezone
 import json
-from typing import List, Optional
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+from typing import List, Optional
 
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
+from transformers import AutoTokenizer, AutoModelForSequenceClassification, pipeline
 import torch
 import aiohttp
 from loguru import logger
