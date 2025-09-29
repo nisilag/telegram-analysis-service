@@ -31,20 +31,14 @@ services:
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
-      - ./init-ollama.sh:/init-ollama.sh:ro
     networks:
       - telegram_network
-    command: >
-      sh -c "ollama serve &
-      sleep 10 &&
-      ollama pull llama3.2:3b &&
-      wait"
     healthcheck:
-      test: ["CMD", "ollama", "list", "|", "grep", "llama3.2"]
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:11434/api/version || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 10
-      start_period: 300s
+      start_period: 60s
 
   app:
     build: .
@@ -54,7 +48,7 @@ services:
       postgres:
         condition: service_healthy
       ollama:
-        condition: service_healthy
+        condition: service_started
     # Wait for PostgreSQL to be ready before starting
     command: ["sh", "-c", "./wait-for-postgres.sh postgres 5432 telegram_user telegram_analysis \"$$POSTGRES_PASSWORD\" python app.py"]
     environment:
