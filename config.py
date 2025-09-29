@@ -33,7 +33,7 @@ class Config(BaseSettings):
     # LLM settings for crypto insights
     ollama_base_url: str = Field(default="http://localhost:11434", description="Ollama API base URL")
     ollama_model: str = Field(default="llama3.2:3b", description="Ollama model to use")
-    ollama_timeout: int = Field(default=15, description="Ollama request timeout in seconds")
+    ollama_timeout: int = Field(default=120, description="Ollama request timeout in seconds")
     enable_llm_insights: bool = Field(default=True, description="Enable LLM-based crypto insights extraction")
     
     # Bot settings (optional)
