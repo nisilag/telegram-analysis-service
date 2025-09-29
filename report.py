@@ -116,51 +116,41 @@ class ReportGenerator:
         if not token_data:
             return header + summary + "No investment-related tokens found in this period.\n"
         
-        # Format tokens in a clean, readable way
+        # Format tokens in clean BULLISH/BEARISH sections
         token_list = ""
         for i, (token, data) in enumerate(token_data.items(), 1):
-            # Get contributors (limit to 4 for readability)
-            valid_contributors = [str(c) for c in data['contributors'][:4] if c is not None]
+            # Get contributors (limit to 8 for readability)
+            valid_contributors = [str(c) for c in data['contributors'][:8] if c is not None]
             contributors = ", ".join(valid_contributors)
-            if len(data['contributors']) > 4:
-                contributors += f" +{len(data['contributors']) - 4} more"
+            if len(data['contributors']) > 8:
+                contributors += f" +{len(data['contributors']) - 8} more"
             
             # Count mentions
             mention_count = data['message_count']
             
-            # Get sentiment breakdown
-            bullish_count = data['bullish_count']
-            bearish_count = data['bearish_count']
+            # Add token header
+            token_list += f"{i}. {token} ({mention_count} mentions)\n"
+            token_list += f"👥 Contributors: {contributors}\n\n"
             
-            # Format sentiment summary
-            sentiment_summary = []
-            if bullish_count > 0:
-                sentiment_summary.append(f"🟢 {bullish_count} bullish")
-            if bearish_count > 0:
-                sentiment_summary.append(f"🔴 {bearish_count} bearish")
-            if not sentiment_summary:
-                sentiment_summary.append("⚪ neutral")
-            
-            sentiment_text = ", ".join(sentiment_summary)
-            
-            # Add token entry
-            token_list += f"**{i}. {token}** ({mention_count} mentions)\n"
-            token_list += f"   👥 Contributors: {contributors}\n"
-            token_list += f"   📊 Sentiment: {sentiment_text}\n"
-            
-            # Add top insights if available
-            insights = []
+            # Add BULLISH section
             if data['bullish_points']:
-                insights.extend([f"🟢 {point[:60]}..." if len(point) > 60 else f"🟢 {point}" 
-                               for point in data['bullish_points'][:2]])
-            if data['bearish_points']:
-                insights.extend([f"🔴 {point[:60]}..." if len(point) > 60 else f"🔴 {point}" 
-                               for point in data['bearish_points'][:2]])
+                token_list += "📈 BULLISH:\n"
+                for point in data['bullish_points'][:4]:
+                    if point and str(point).strip():
+                        token_list += f"• {str(point).strip()}\n"
+                token_list += "\n"
             
-            if insights:
-                token_list += f"   💡 Key insights:\n"
-                for insight in insights[:3]:  # Max 3 insights per token
-                    token_list += f"      {insight}\n"
+            # Add BEARISH section
+            if data['bearish_points']:
+                token_list += "📉 BEARISH:\n"
+                for point in data['bearish_points'][:4]:
+                    if point and str(point).strip():
+                        token_list += f"• {str(point).strip()}\n"
+                token_list += "\n"
+            
+            # If no sentiment points, show neutral
+            if not data['bullish_points'] and not data['bearish_points']:
+                token_list += "⚪ No significant directional sentiment detected\n\n"
             
             token_list += "\n"
         
