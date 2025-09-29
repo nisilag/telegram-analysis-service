@@ -17,28 +17,10 @@ services:
       - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U telegram_user -d telegram_analysis"]
-      interval: 10s
       timeout: 5s
       retries: 5
     networks:
       - telegram_network
-
-  ollama:
-    image: ollama/ollama:latest
-    container_name: telegram_analysis_ollama
-    restart: unless-stopped
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    networks:
-      - telegram_network
-    healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:11434/api/version || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 10
-      start_period: 60s
 
   app:
     build: .
@@ -47,8 +29,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      ollama:
-        condition: service_started
     # Wait for PostgreSQL to be ready before starting
     command: ["sh", "-c", "./wait-for-postgres.sh postgres 5432 telegram_user telegram_analysis \"$$POSTGRES_PASSWORD\" python app.py"]
     environment:
@@ -76,11 +56,16 @@ services:
       MODEL_VERSION: ${MODEL_VERSION:-1}
       CONFIDENCE_THRESHOLD: ${CONFIDENCE_THRESHOLD:-0.7}
       
-      # LLM settings
+      # LLM settings - Groq API
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      GROQ_MODEL: ${GROQ_MODEL:-llama-3.1-8b-instant}
+      GROQ_TIMEOUT: ${GROQ_TIMEOUT:-30}
+      ENABLE_LLM_INSIGHTS: ${ENABLE_LLM_INSIGHTS:-true}
+      
+      # Legacy Ollama settings (deprecated)
       OLLAMA_BASE_URL: http://ollama:11434
       OLLAMA_MODEL: llama3.2:3b
       OLLAMA_TIMEOUT: ${OLLAMA_TIMEOUT:-15}
-      ENABLE_LLM_INSIGHTS: ${ENABLE_LLM_INSIGHTS:-false}
       
       # PostgreSQL password for wait script
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secure_password_change_me}
@@ -127,8 +112,6 @@ volumes:
   model_cache:
     driver: local
   backup_data:
-    driver: local
-  ollama_data:
     driver: local
 
 networks:

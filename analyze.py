@@ -11,6 +11,7 @@ from typing import List, Optional
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, pipeline
 import torch
 import aiohttp
+from groq import AsyncGroq
 from loguru import logger
 
 from models import TelegramMessage, MessageAnalysis, SentimentType
@@ -29,6 +30,11 @@ class MessageAnalyzer:
         # This prevents matching dollar amounts like $10M, $5B, etc.
         self._token_pattern = re.compile(r'\$([A-Z][A-Z0-9_]{1,9})\b')
         self._finance_pattern = self._build_finance_pattern()
+        
+        # Initialize Groq client
+        self.groq_client = None
+        if config.groq_api_key:
+            self.groq_client = AsyncGroq(api_key=config.groq_api_key)
         
     def _build_finance_pattern(self) -> re.Pattern:
         """Build regex pattern for finance keywords with word boundaries."""
@@ -90,12 +96,12 @@ class MessageAnalyzer:
         # Generate topic key
         topic_key = self._generate_topic_key(tokens, text)
         
-        # Extract key points using LLM if investment-related
+        # Extract key points using Groq if investment-related
         if is_investment:
             try:
-                key_points = await self._extract_crypto_insights_with_llm(text, tokens)
+                key_points = await self._extract_crypto_insights_with_groq(text, tokens)
             except Exception as e:
-                logger.warning(f"LLM key points extraction failed: {e}")
+                logger.warning(f"Groq key points extraction failed: {e}")
                 key_points = self._extract_key_points_fallback(text)
         else:
             key_points = []
@@ -297,64 +303,65 @@ class MessageAnalyzer:
         
         return "GENERAL"
     
-    async def _extract_crypto_insights_with_llm(self, text: str, tokens: List[str]) -> List[str]:
+    async def _extract_crypto_insights_with_groq(self, text: str, tokens: List[str]) -> List[str]:
         """
-        Extract Grok-style crypto insights using local Llama model.
+        Extract consolidatable crypto insights using Groq API.
         """
-        if not config.enable_llm_insights:
+        if not config.enable_llm_insights or not self.groq_client:
             return self._extract_key_points_fallback(text)
             
         try:
-            # Prepare the prompt
-            tokens_str = ", ".join(tokens) if tokens else "None detected"
-            prompt = f"""Extract 1-2 concise crypto investment insights from this message.
-Focus on: price targets, market positioning, fundamentals, performance, competitive dynamics.
-Format: 4-8 words max per insight, no filler words.
+            # Prepare the prompt for consolidatable insights
+            tokens_str = ", ".join(tokens) if tokens else "crypto tokens"
+            prompt = f"""Extract 1-2 KEY crypto insights from this message about {tokens_str}. Focus on insights that could be mentioned by multiple people.
 
-Examples:
-- "BTC to 600K goal"
-- "SOL vamping ETH ecosystem"
-- "Constant buybacks from revenue"
-- "First mover in robotics"
-- "Up 60% in 24h"
+Message: "{text[:400]}"
 
-Message: {text[:500]}
-Tokens mentioned: {tokens_str}
+Rules:
+- Output ONLY short phrases (2-6 words)
+- Focus on REPEATABLE insights: team quality, backing, partnerships, scandals
+- Avoid unique price predictions or personal opinions
+- Look for: founder backing, team reputation, major partnerships, legal issues, technical developments
+- One insight per line, no bullets or numbers
+- Maximum 2 insights
+
+Good examples:
+- "CZ backing"
+- "Proven team"
+- "Major partnership"
+- "Founder imprisoned"
+- "Strong fundamentals"
+- "Regulatory issues"
 
 Insights:"""
-
-            # Call Ollama API
-            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=config.ollama_timeout)) as session:
-                payload = {
-                    "model": config.ollama_model,
-                    "prompt": prompt,
-                    "stream": False,
-                    "options": {
-                        "temperature": 0.3,
-                        "top_p": 0.9,
-                        "max_tokens": 100
-                    }
-                }
-                
-                async with session.post(f"{config.ollama_base_url}/api/generate", json=payload) as response:
-                    if response.status == 200:
-                        result = await response.json()
-                        insights_text = result.get("response", "").strip()
-                        
-                        # Parse insights from response
-                        insights = self._parse_llm_insights(insights_text)
-                        if insights:
-                            logger.debug(f"LLM extracted insights: {insights}")
-                            return insights
-                        else:
-                            logger.debug("LLM returned no valid insights, using fallback")
-                            return self._extract_key_points_fallback(text)
-                    else:
-                        logger.warning(f"Ollama API error: {response.status}")
-                        return self._extract_key_points_fallback(text)
+            
+            # Make request to Groq API
+            response = await self.groq_client.chat.completions.create(
+                model=config.groq_model,
+                messages=[
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.1,
+                max_tokens=50,
+                timeout=config.groq_timeout
+            )
+            
+            llm_response = response.choices[0].message.content.strip()
+            
+            if not llm_response:
+                return self._extract_key_points_fallback(text)
+            
+            # Parse insights from response
+            insights = self._parse_llm_insights(llm_response)
+            if insights:
+                logger.debug(f"Groq extracted insights: {insights}")
+                return insights
+            else:
+                logger.debug("Groq returned no valid insights, using fallback")
+                return self._extract_key_points_fallback(text)
                         
         except Exception as e:
-            logger.warning(f"LLM insight extraction failed: {e}, using fallback")
+            logger.warning(f"Groq insight extraction failed: {e}, using fallback")
             return self._extract_key_points_fallback(text)
     
     def _parse_llm_insights(self, llm_response: str) -> List[str]:
@@ -459,9 +466,11 @@ Insights:"""
     def _extract_key_points(self, text: str) -> List[str]:
         """
         Main entry point for key points extraction.
+        NOTE: This is a sync method but we need async for Groq.
+        This method should not be used - use the async version in analyze_message.
         """
-        # Always use enhanced pattern matching (LLM disabled for performance)
-        return self._extract_key_points_fallback(text)
+        # Fallback only - real extraction happens in analyze_message async method
+        return []
     
     async def close(self):
         """Clean up resources."""
