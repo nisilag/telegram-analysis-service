@@ -427,6 +427,7 @@ class DatabaseStore:
                 is_investment = row_dict.get('is_investment', False)
                 sentiment = row_dict.get('sentiment')
                 tokens = row_dict.get('tokens', []) or []
+                key_points = row_dict.get('key_points', []) or []
             else:
                 # SQLite row handling
                 is_investment = bool(row[12]) if len(row) > 12 and row[12] is not None else False
@@ -456,6 +457,7 @@ class DatabaseStore:
                 'is_investment': is_investment,
                 'sentiment': sentiment,
                 'tokens': tokens,
+                'key_points': key_points if self.is_postgres else (json.loads(row[16]) if len(row) > 16 and row[16] else []),
                 'topic_key': row[15] if len(row) > 15 else None
             }
             messages.append(msg_dict)
